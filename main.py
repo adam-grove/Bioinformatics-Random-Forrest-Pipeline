@@ -10,7 +10,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 import re
 from sklearn.metrics import f1_score
-
+import seaborn as sns
 ### Part 1
 
 
@@ -20,8 +20,8 @@ pltform = pd.read_table("GPL570-55999.txt", comment="#", delimiter='\t') # Need 
 
 
 # Having a look at the metadata
-print(meta_data.shape)
-print(meta_data.head(5))
+# print(meta_data.shape)
+# print(meta_data.head(5))
 
 # Splitting the data into the different groups
 influenza_meta = meta_data[meta_data["infection_status"] == "influenza"]
@@ -33,7 +33,11 @@ influenza_gene_probes =influenza_meta["Sample_geo_accession"].tolist()
 rsv_gene_probes = rsv_meta["Sample_geo_accession"].tolist()
 control_gene_probes = control_meta["Sample_geo_accession"].tolist()
 # Reading in the matrix file
-GE_matrix = pd.read_table("GSE34205_series_matrix_clean.txt", sep="\t", nrows= 1000)
+GE_matrix = pd.read_table("GSE34205_series_matrix_clean.txt", sep="\t", index_col=0)
+original_index = GE_matrix.index # Will need to use this later
+GE_matrix.reset_index(drop=True,inplace=True)
+
+
 
 all_samples = influenza_gene_probes + rsv_gene_probes + control_gene_probes
 GE_matrix = GE_matrix.reindex(columns=all_samples)
@@ -41,7 +45,7 @@ GE_matrix = GE_matrix.reindex(columns=all_samples)
 # Having a look at the matrix
 print(GE_matrix.shape)
 print(GE_matrix.head())
-
+print(GE_matrix.index)
 
 # Assigning new values
 GE_matrix = GE_matrix.assign(mean_rsv_ratio=np.zeros(len(GE_matrix)))
@@ -57,6 +61,8 @@ GE_matrix["Selected_feature"] = False
 # Subsetting data
 influenza_matrix = GE_matrix[influenza_gene_probes]
 rsv_matrix = GE_matrix[rsv_gene_probes]
+print(rsv_matrix.shape)
+
 
 # Checking subsets have been done correctly
 # print(influenza_matrix.head())
@@ -67,22 +73,21 @@ rsv_matrix = GE_matrix[rsv_gene_probes]
 
 ## Calculating P values and corrected P values
 # Influenza patients Mean and P value
-for i in range(GE_matrix.shape[0]): # Loops through each row
-    mean = np.log(influenza_matrix.iloc[i,:]).mean() # Row mean values
-    p_value = stats.ttest_1samp(np.log(influenza_matrix.iloc[i,:].tolist()),0.0).pvalue
-    GE_matrix.at[i,"mean_flu_ratio"] = mean
-    GE_matrix.at[i,"p_value_flu"] = p_value
+flu_mean_values = np.log(influenza_matrix).mean(axis=1)
+t_stat, flu_p_values = stats.ttest_1samp(np.log(influenza_matrix),0.0,axis=1)
+GE_matrix["mean_flu_ratio"] = flu_mean_values
+GE_matrix["p_value_flu"] = flu_p_values
 
 # Bonferroni correction for influenza patients
 num_rows = len(GE_matrix)
 GE_matrix["corrected_p_value_flu"] = GE_matrix["p_value_flu"] * num_rows
 
-# Influenza patients Mean and RSV value
-for i in range(GE_matrix.shape[0]): # Loops through each row
-    mean = np.log(rsv_matrix.iloc[i,:]).mean() # Row mean values
-    p_value = stats.ttest_1samp(np.log(rsv_matrix.iloc[i,:].tolist()),0.0).pvalue
-    GE_matrix.at[i,"mean_rsv_ratio"] = mean
-    GE_matrix.at[i,"p_value_rsv"] = p_value
+# RSV mean and P value
+rsv_mean_values = np.log(rsv_matrix).mean(axis=1)
+t_stat, rsv_p_values = stats.ttest_1samp(np.log(rsv_matrix),0.0,axis=1)
+GE_matrix["mean_rsv_ratio"] = rsv_mean_values
+GE_matrix["p_value_rsv"] = rsv_p_values
+
 
 # Bonferroni correction for RSV patients
 num_rows = len(GE_matrix)
@@ -101,34 +106,90 @@ for i in range(GE_matrix.shape[0]):
 print(GE_matrix["Selected_flu_feature"].value_counts())
 print(GE_matrix["Selected_rsv_feature"].value_counts())
 
+
+
+# Putting the index back in
+GE_matrix.set_index(original_index, inplace=True)
+GE_matrix.insert(0,"ID_REF",original_index)
+
+# Mapping the genes
+mapping_genes = dict(zip(pltform["ID"], pltform["Gene Symbol"])) # Creates a dictionary from the Gene ID and Gene symbols
+Volcano_matrix = GE_matrix.copy()
+
+Volcano_matrix["ID_REF"] = Volcano_matrix["ID_REF"].replace(mapping_genes)
+
+print(pltform["ID"].value_counts())
+print(len(mapping_genes))
 # Full output File
 GE_matrix.to_csv("matrix_plus_stats.csv ", index = False)
+print("GE_matrix",GE_matrix)
+
+
+
 
 # Features File
 Features_matrix = GE_matrix[GE_matrix["Selected_feature"] == True]
 Features_matrix.to_csv("features.csv", index = False)
-
 # Volcano Plot for flu
 plt.style.use("seaborn-v0_8-darkgrid")
 fig,ax  = plt.subplots()
-ax.scatter(GE_matrix["mean_flu_ratio"], -np.log(GE_matrix["corrected_p_value_flu"]),
-           c = np.where(GE_matrix["Selected_flu_feature"], "firebrick","cornflowerblue"))
+ax.scatter(Volcano_matrix["mean_flu_ratio"], -np.log(Volcano_matrix["corrected_p_value_flu"]),
+           c = np.where(Volcano_matrix["Selected_flu_feature"], "firebrick","cornflowerblue"))
 ax.set(xlabel= "Mean log ratio", ylabel= "-log10(Corrected P-value)", title= "Influenza Volcano plot")
 ax.legend(handles=[
     plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="firebrick", markersize=10, label="Significant"),
     plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="cornflowerblue", markersize=10, label="Not Significant"),
 ])
+
+# Annotating the significant points
+rsv_significant = Volcano_matrix["Selected_flu_feature"] # Signficant plots
+for i, txt in enumerate(Volcano_matrix["ID_REF"]): # Loops through each row
+
+    # X and Y values
+    x = Volcano_matrix["mean_flu_ratio"].iloc[i]
+    y = -np.log(Volcano_matrix["corrected_p_value_flu"]).iloc[i]
+
+    # If it is signficant - label the point
+    if Volcano_matrix["Selected_flu_feature"].iloc[i]:  # Check for red point
+        ax.annotate(txt,
+                    xy=(x, y),
+                    xytext=(0, 5),
+                    textcoords='offset pixels',
+                    ha='center', va='bottom', fontsize=5, color='black', fontweight='bold')
+
+
 fig.savefig("flu_Volcano.png", format="png")
 
 # Volcano Plot for rsv
 fig,ax  = plt.subplots()
-ax.scatter(GE_matrix["mean_rsv_ratio"], -np.log(GE_matrix["corrected_p_value_rsv"]),
-           c = np.where(GE_matrix["Selected_rsv_feature"], "firebrick","cornflowerblue"))
+ax.scatter(Volcano_matrix["mean_rsv_ratio"], -np.log(Volcano_matrix["corrected_p_value_rsv"]),
+           c = np.where(Volcano_matrix["Selected_rsv_feature"], "firebrick","cornflowerblue"))
+
 ax.set(xlabel= "Mean log ratio", ylabel= "-log10(Corrected P-value)", title= "Rsv Volcano plot")
 ax.legend(handles=[
     plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="firebrick", markersize=10, label="Significant"),
     plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="cornflowerblue", markersize=10, label="Not Significant"),
 ])
+
+# Annotating significant points with labels centered above the points
+rsv_significant = Volcano_matrix["Selected_rsv_feature"] # Signficant plots
+for i, txt in enumerate(Volcano_matrix["ID_REF"]): # Loops through each row
+
+    # X and Y values
+    x = Volcano_matrix["mean_rsv_ratio"].iloc[i]
+    y = -np.log(Volcano_matrix["corrected_p_value_rsv"]).iloc[i]
+
+    # If it is signficant - label the point
+    if Volcano_matrix["Selected_rsv_feature"].iloc[i]:  # Check for red point
+        ax.annotate(txt,
+                    xy=(x, y),
+                    xytext=(0, 5),
+                    textcoords='offset pixels',
+                    ha='center', va='bottom', fontsize=5, color='black', fontweight='bold')
+
+
+fig.savefig("rsv_Volcano.png", format="png")
+
 fig.savefig("rsv_Volcano.png", format="png")
 
 
@@ -141,23 +202,28 @@ features = pd.read_csv("features.csv",header=None)
 
 
 # Transpose the dataframe
-
 features_transposed = features.iloc[:,0:101].T # Tranposes# the df
-# features_transposed.set_index(features_transposed[0], inplace = True) # Sets the gene names as the index
-# features_transposed = features_transposed.drop(features_transposed.columns[0],axis = 1) # Drops the orignal gene name column
-#features_transposed.index = features_transposed.index.rename("Sample_geo_accession") # Renames the index
+
+# Setting the index
+features_transposed.set_index(features_transposed[0], inplace = True) # Sets the gene names as the index
+features_transposed = features_transposed.drop(features_transposed.columns[0],axis = 1) # Drops the orignal gene name column
+
+# Setting the column names
+features_transposed.columns = features_transposed.iloc[0]
+features_transposed = features_transposed.drop(features_transposed.index[0])
+
+# Renaming the index
+features_transposed.index = features_transposed.index.rename("Sample_geo_accession") # Renames the index
 features_transposed.rename(columns = {0:"Sample_geo_accession"}, inplace=True) # Renaming the gene ID table
 features_transposed.to_csv("Test.csv") # For testing purposes
+print(features_transposed.columns)
 # Check out the new data frame
 
-# Creating the PCA
-# Splitting up the DF
-# flu_PCA_df = features_transposed.loc[influenza_gene_probes]
-# rsv_PCA_df = features_transposed.loc[rsv_gene_probes]
-# control_PCA_df = features_transposed.loc[control_gene_probes]
 
 # Scaling the variables
-x = features_transposed.iloc[:,1:]
+
+
+x = features_transposed
 x = StandardScaler().fit_transform(x)
 plt.style.use("seaborn-v0_8-darkgrid")
 
@@ -165,9 +231,9 @@ plt.style.use("seaborn-v0_8-darkgrid")
 pca = PCA(n_components=2)
 principalComponents = pca.fit_transform(x)
 principalDf = pd.DataFrame(data = principalComponents, columns = ['principal component 1', 'principal component 2'])
-# Plotting the PCA
-final_PCA_df = pd.concat([features_transposed["Sample_geo_accession"],principalDf],axis=1)
-print(final_PCA_df)
+
+# Creating the final PCA dataframe
+final_PCA_df = pd.concat([features_transposed.reset_index(),principalDf],axis=1)
 
 # Labels and dataframes
 conditions_probes = [influenza_gene_probes,rsv_gene_probes,control_gene_probes]
@@ -248,7 +314,7 @@ fig.savefig("Age_PCA.png", format="png")
 # Part 3 - Building a classifier model
 
 # Setting up the data frame
-GE_matrix2 = pd.read_csv("GSE34205_series_matrix_clean.txt", sep = "\t", nrows=1000, index_col=0) # Needs the gene ID labels
+GE_matrix2 = pd.read_csv("GSE34205_series_matrix_clean.txt", sep = "\t", index_col=0) # Needs the gene ID labels
 all_transposed = GE_matrix2.T
 
 all_transposed.index = all_transposed.index.rename("Sample_geo_accession")
@@ -322,7 +388,6 @@ with open("Importance_report_file.txt","w") as txt_file:
         all_feature_imp_temp = [df.copy() for df in all_feature_imp] # Stops things messing up later in the code
         temp_feature_imp = all_feature_imp_temp[i]
         # # Using more useful names for the genes of the feature importance
-        mapping_genes = dict(zip(pltform["ID"], pltform["Gene Symbol"]))  # Creates a dictionary from the Gene ID and Gene symbols
         temp_feature_imp.index = temp_feature_imp.index.map(mapping_genes)  # Maps them to the features importance dataset
         # Writing the importance to a file
         txt_file.write(f"Run {1+i} Importance Report\n")
@@ -400,10 +465,22 @@ for i, gene_ID in enumerate(hundred_features.index) :
 plt.tight_layout()
 
 fig.savefig("Boxplots.png", format="png")
-# influenz
 
-# rsv
+# Creating the heatmap
+heatmap_data = GE_matrix2
 
-# control
+#Normalising the data
+scaler = StandardScaler()
+normalised = scaler.fit_transform(heatmap_data)
 
-# Create a heatmap in seaborn 
+# Creating the normalised dataframe
+normalised_data = pd.DataFrame(normalised,index=GE_matrix2.index,columns=GE_matrix2.columns)
+
+# Plotting the figure
+plt.figure(figsize=(12,8))
+heatmap_fig = sns.heatmap(normalised_data, cmap="coolwarm",yticklabels=False)
+heatmap_fig.set_title("Normalised Gene Expression")
+heatmap_fig.set(xlabel="Participant",ylabel="Gene")
+
+# Save the figure
+heatmap_fig.figure.savefig("heatmap.png", format="png")
