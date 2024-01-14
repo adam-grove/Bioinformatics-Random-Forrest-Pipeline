@@ -20,8 +20,8 @@ pltform = pd.read_table("GPL570-55999.txt", comment="#", delimiter='\t') # Need 
 
 
 # Having a look at the metadata
-# print(meta_data.shape)
-# print(meta_data.head(5))
+print(meta_data.shape)
+print(meta_data.head(5))
 
 # Splitting the data into the different groups
 influenza_meta = meta_data[meta_data["infection_status"] == "influenza"]
@@ -32,20 +32,20 @@ control_meta = meta_data[meta_data["infection_status"] == "none"]
 influenza_gene_probes =influenza_meta["Sample_geo_accession"].tolist()
 rsv_gene_probes = rsv_meta["Sample_geo_accession"].tolist()
 control_gene_probes = control_meta["Sample_geo_accession"].tolist()
+
 # Reading in the matrix file
 GE_matrix = pd.read_table("GSE34205_series_matrix_clean.txt", sep="\t", index_col=0)
 original_index = GE_matrix.index # Will need to use this later
 GE_matrix.reset_index(drop=True,inplace=True)
 
-
-
+# Reindexing the samples
 all_samples = influenza_gene_probes + rsv_gene_probes + control_gene_probes
 GE_matrix = GE_matrix.reindex(columns=all_samples)
 
 # Having a look at the matrix
 print(GE_matrix.shape)
 print(GE_matrix.head())
-print(GE_matrix.index)
+
 
 # Assigning new values
 GE_matrix = GE_matrix.assign(mean_rsv_ratio=np.zeros(len(GE_matrix)))
@@ -87,7 +87,6 @@ rsv_mean_values = np.log(rsv_matrix).mean(axis=1)
 t_stat, rsv_p_values = stats.ttest_1samp(np.log(rsv_matrix),0.0,axis=1)
 GE_matrix["mean_rsv_ratio"] = rsv_mean_values
 GE_matrix["p_value_rsv"] = rsv_p_values
-
 
 # Bonferroni correction for RSV patients
 num_rows = len(GE_matrix)
