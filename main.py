@@ -106,22 +106,22 @@ print(GE_matrix["Selected_flu_feature"].value_counts())
 print(GE_matrix["Selected_rsv_feature"].value_counts())
 
 
-
 # Putting the index back in
 GE_matrix.set_index(original_index, inplace=True)
 GE_matrix.insert(0,"ID_REF",original_index)
+
+# Full output File
+GE_matrix.to_csv("matrix_plus_stats.csv ", index = False)
+print("GE_matrix",GE_matrix)
+
 
 # Mapping the genes
 mapping_genes = dict(zip(pltform["ID"], pltform["Gene Symbol"])) # Creates a dictionary from the Gene ID and Gene symbols
 Volcano_matrix = GE_matrix.copy()
 
 Volcano_matrix["ID_REF"] = Volcano_matrix["ID_REF"].replace(mapping_genes)
+print(Volcano_matrix.index)
 
-print(pltform["ID"].value_counts())
-print(len(mapping_genes))
-# Full output File
-GE_matrix.to_csv("matrix_plus_stats.csv ", index = False)
-print("GE_matrix",GE_matrix)
 
 
 
@@ -141,20 +141,19 @@ ax.legend(handles=[
 ])
 
 # Annotating the significant points
-rsv_significant = Volcano_matrix["Selected_flu_feature"] # Signficant plots
 for i, txt in enumerate(Volcano_matrix["ID_REF"]): # Loops through each row
 
     # X and Y values
     x = Volcano_matrix["mean_flu_ratio"].iloc[i]
     y = -np.log(Volcano_matrix["corrected_p_value_flu"]).iloc[i]
 
-    # If it is signficant - label the point
-    if Volcano_matrix["Selected_flu_feature"].iloc[i]:  # Check for red point
-        ax.annotate(txt,
-                    xy=(x, y),
-                    xytext=(0, 5),
-                    textcoords='offset pixels',
-                    ha='center', va='bottom', fontsize=5, color='black', fontweight='bold')
+    # # If it is significant - label the point
+    # if Volcano_matrix["Selected_flu_feature"].iloc[i]:  # Check for red point
+    #     ax.annotate(txt,
+    #                 xy=(x, y),
+    #                 xytext=(0, 5),
+    #                 textcoords='offset pixels',
+    #                 ha='center', va='bottom', fontsize=5, color='black', fontweight='bold')
 
 
 fig.savefig("flu_Volcano.png", format="png")
@@ -164,7 +163,7 @@ fig,ax  = plt.subplots()
 ax.scatter(Volcano_matrix["mean_rsv_ratio"], -np.log(Volcano_matrix["corrected_p_value_rsv"]),
            c = np.where(Volcano_matrix["Selected_rsv_feature"], "firebrick","cornflowerblue"))
 
-ax.set(xlabel= "Mean log ratio", ylabel= "-log10(Corrected P-value)", title= "Rsv Volcano plot")
+ax.set(xlabel= "Mean RSV expression ", ylabel= "-log10(Corrected P-value)", title= "Rsv Volcano plot")
 ax.legend(handles=[
     plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="firebrick", markersize=10, label="Significant"),
     plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="cornflowerblue", markersize=10, label="Not Significant"),
@@ -178,16 +177,14 @@ for i, txt in enumerate(Volcano_matrix["ID_REF"]): # Loops through each row
     x = Volcano_matrix["mean_rsv_ratio"].iloc[i]
     y = -np.log(Volcano_matrix["corrected_p_value_rsv"]).iloc[i]
 
-    # If it is signficant - label the point
-    if Volcano_matrix["Selected_rsv_feature"].iloc[i]:  # Check for red point
-        ax.annotate(txt,
-                    xy=(x, y),
-                    xytext=(0, 5),
-                    textcoords='offset pixels',
-                    ha='center', va='bottom', fontsize=5, color='black', fontweight='bold')
+    # # If it is signficant - label the point
+    # if Volcano_matrix["Selected_rsv_feature"].iloc[i]:  # Check for red point
+    #     ax.annotate(txt,
+    #                 xy=(x, y),
+    #                 xytext=(0, 5),
+    #                 textcoords='offset pixels',
+    #                 ha='center', va='bottom', fontsize=5, color='black', fontweight='bold')
 
-
-fig.savefig("rsv_Volcano.png", format="png")
 
 fig.savefig("rsv_Volcano.png", format="png")
 
@@ -216,7 +213,7 @@ features_transposed.index = features_transposed.index.rename("Sample_geo_accessi
 features_transposed.rename(columns = {0:"Sample_geo_accession"}, inplace=True) # Renaming the gene ID table
 features_transposed.to_csv("Test.csv") # For testing purposes
 print(features_transposed.columns)
-# Check out the new data frame
+
 
 
 # Scaling the variables
@@ -466,7 +463,7 @@ plt.tight_layout()
 fig.savefig("Boxplots.png", format="png")
 
 # Creating the heatmap
-heatmap_data = GE_matrix2
+heatmap_data = np.log(influenza_matrix)
 
 #Normalising the data
 scaler = StandardScaler()
