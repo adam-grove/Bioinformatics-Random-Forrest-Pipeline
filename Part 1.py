@@ -111,7 +111,7 @@ GE_matrix.insert(0,"ID_REF",original_index)
 
 # Full output File
 GE_matrix.to_csv("matrix_plus_stats.csv ", index = False)
-print("GE_matrix",GE_matrix)
+#print("GE_matrix",GE_matrix)
 
 
 # Mapping the genes
@@ -120,13 +120,12 @@ mapping_genes = dict(zip(pltform["ID"], pltform["Gene Symbol"])) # Creates a dic
 # Filling empty values
 for key,value in mapping_genes.items():
     if value is None or value != value:
-        print("Empty found for key:", key)
         mapping_genes[key] = key
 
 Volcano_matrix = GE_matrix.copy()
 
 Volcano_matrix["ID_REF"] = Volcano_matrix["ID_REF"].replace(mapping_genes)
-print(Volcano_matrix.index)
+# print(Volcano_matrix.index)
 #
 #
 #
@@ -137,17 +136,21 @@ Features_matrix = GE_matrix[GE_matrix["Selected_feature"] == True]
 Features_matrix.to_csv("features.csv", index = False)
 
 
+
 # Volcano Plot for flu
+print("Plotting Flu Volcano")
 plt.style.use("seaborn-v0_8-darkgrid")
-fig,ax  = plt.subplots()
-ax.scatter(Volcano_matrix["mean_flu_ratio"], -np.log(Volcano_matrix["corrected_p_value_flu"]),
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+ax1.scatter(Volcano_matrix["mean_flu_ratio"], -np.log(Volcano_matrix["corrected_p_value_flu"]),
            c = np.where(Volcano_matrix["Selected_flu_feature"], "firebrick","cornflowerblue"))
-ax.set(xlabel= "Mean log ratio", ylabel= "-log10(Corrected P-value)", title= "Influenza Volcano plot")
-ax.legend(handles=[
+ax1.set(xlabel= "Mean log ratio", ylabel= "-log10(Corrected P-value)", title= "Influenza Volcano plot")
+ax1.legend(handles=[
     plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="firebrick", markersize=10, label="Significant"),
     plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="cornflowerblue", markersize=10, label="Not Significant"),
 ])
-
+ax1.set_ylim(-15, 55)
+ax1.set_xlim(-3, 5)
 # Annotating the significant points
 for i, txt in enumerate(Volcano_matrix["ID_REF"]): # Loops through each row (gets the Gene identifier as text)
     # X and Y values
@@ -156,25 +159,27 @@ for i, txt in enumerate(Volcano_matrix["ID_REF"]): # Loops through each row (get
 
     # If it is significant - label the point
     if abs(x) > 2 and y > 1.30:  # Check for significance
-        ax.annotate(txt,
+        ax1.annotate(txt,
                     xy=(x, y),
                     xytext=(0, 5),
                     textcoords='offset pixels',
                     ha='center', va='bottom', fontsize=5, color='black', fontweight='bold')
 
 
-fig.savefig("flu_Volcano.png", format="png")
 
 # Volcano Plot for rsv
-fig,ax  = plt.subplots()
-ax.scatter(Volcano_matrix["mean_rsv_ratio"], -np.log(Volcano_matrix["corrected_p_value_rsv"]),
+print("Plotting RSV Volcano")
+ax2.scatter(Volcano_matrix["mean_rsv_ratio"], -np.log(Volcano_matrix["corrected_p_value_rsv"]),
            c = np.where(Volcano_matrix["Selected_rsv_feature"], "firebrick","cornflowerblue"))
 
-ax.set(xlabel= "Mean RSV expression ", ylabel= "-log10(Corrected P-value)", title= "Rsv Volcano plot")
-ax.legend(handles=[
+ax2.set( xlabel= "Mean RSV expression ", ylabel= "-log10(Corrected P-value)", title= "Rsv Volcano plot")
+ax2.legend(handles=[
     plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="firebrick", markersize=10, label="Significant"),
     plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="cornflowerblue", markersize=10, label="Not Significant"),
 ])
+
+ax2.set_ylim(-15, 55)
+ax2.set_xlim(-3, 5)
 
 # Annotating the most  significant points with labels centered above the points
 for i, txt in enumerate(Volcano_matrix["ID_REF"]): # Loops through each row
@@ -185,13 +190,13 @@ for i, txt in enumerate(Volcano_matrix["ID_REF"]): # Loops through each row
 
     # If it is signficant - label the point
     if abs(x)>2 and y > 1.30 :  # Check for red point
-        ax.annotate(txt,
+        ax2.annotate(txt,
                     xy=(x, y),
                     xytext=(0, 5),
                     textcoords='offset pixels',
                     ha='center', va='bottom', fontsize=5, color='black', fontweight='bold')
 
 
-fig.savefig("rsv_Volcano.png", format="png")
+fig.savefig("Volcanos.png", format="png")
 #
 #

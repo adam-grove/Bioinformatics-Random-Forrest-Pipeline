@@ -26,7 +26,6 @@ for key,value in mapping_genes.items():
     if value is None or value != value:
         mapping_genes[key] = key
 
-
 # Put a check to see
 
 
@@ -61,7 +60,7 @@ runs = 10 # Can control how many times the random forrest runs
 
 # Running random forrest
 while counter < runs: # Runs 10 times
-    start = time.time()
+    start = time.time() # For fun
 
     # Training the classifier
     classifer.fit(x_train,y_train)
@@ -124,6 +123,19 @@ with open("Summary_report_file.txt","w") as file:
     file.write("Average Confusion Matrix: \n")
     file.write(avg_conf_matrix_df.to_string())
     file.write("\n\n")
+
+    # Creating a figure of the cofusion matrix
+    fig = plt.figure()
+    ax = fig.add_subplot(111) # Creates the plot
+    cax = ax.matshow(avg_conf_matrix_df,cmap="coolwarm") # Uses the coolwarm scale (same as heatmap)
+    plt.title('Confusion matrix of the classifier')
+    fig.colorbar(cax)
+    ax.set_xticklabels([''] + labels)  # these are misaligned unless you add an extra empty label
+    ax.set_yticklabels([''] + labels)
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.savefig("confused.png", format="png")
+
     # Average f_score
     average_f1_score = sum(all_f1_scores) / runs
     average_f1_score = round(average_f1_score,4) # Round to 4 digits
@@ -140,6 +152,7 @@ with open("Summary_report_file.txt","w") as file:
     best_feature_imp_df = best_feature_imp_df.sort_values(by="Average_score",ascending=False)
     # Mapping gene names
     hundred_features = best_feature_imp_df.iloc[:100,:]
+
     best_feature_imp_df.index = best_feature_imp_df.index.map(mapping_genes)  # Maps them to the features importance dataset
 
     # Writing to the file
@@ -147,10 +160,11 @@ with open("Summary_report_file.txt","w") as file:
     counter = 0
     for index, row in best_feature_imp_df.iloc[:100,:].iterrows():
         counter += 1
-        file.write(f"{counter} GeneID: {index} , {row.values[0]}\n")
+        file.write(f"{counter} GeneID: {index} , {row.values}\n")
 
     file.write("\n\n")
 
+# Plotting the boxplots
 num_rows, num_cols = 10, 10
 fig, axes = plt.subplots(nrows=num_rows, ncols=num_cols, figsize=(20, 20))
 num_rows, num_cols = 10, 10
@@ -168,37 +182,63 @@ for i, gene_ID in enumerate(hundred_features.index) :
     data = [infection_groups.get_group("influenza"),infection_groups.get_group("rsv"),infection_groups.get_group("none")]
     axes[i].boxplot(data, labels=["influenza", "rsv", "control"])
     axes[i].set(title=mapping_genes[gene_ID])
-     # Maps them to the features importance dataset
+
 
 plt.tight_layout()
 
 fig.savefig("Boxplots.png", format="png")
 
-# Creating the heatmap
+# Creating the heatmap of the 100 best features, grouped by infection status
+
+influenza_meta = meta_data[meta_data["infection_status"] == "influenza"]
+rsv_meta = meta_data[meta_data["infection_status"] == "rsv"]
+control_meta = meta_data[meta_data["infection_status"] == "none"]
+
+# Creating lists of the gene probes
+influenza_gene_probes =influenza_meta["Sample_geo_accession"].tolist()
+rsv_gene_probes = rsv_meta["Sample_geo_accession"].tolist()
+control_gene_probes = control_meta["Sample_geo_accession"].tolist()
+
+groups = [influenza_gene_probes,rsv_gene_probes,control_gene_probes]
+files = ["influenza","rsv","control"]
+
+
 hundred_list = (hundred_features.index.to_list())
 
 logged_data = np.log(GE_matrix2)
-logged_data = logged_data.loc[hundred_list]
-logged_data.index = logged_data.index.map(mapping_genes)  # Maps them to the features importance dataset
+global_min = logged_data.min().min()
+global_max = logged_data.max().max()
 
-# Normalising the data
-# scaler = StandardScaler()
-# normalised = scaler.fit_transform(heatmap_data)
 
-# Logged data
+fig, axes = plt.subplots(ncols=3, figsize=(12, 8))
 
-# Creating the normalised dataframe
-#normalised_data = pd.DataFrame(normalised,index=GE_matrix2.index,columns=GE_matrix2.columns)
 
-# Plotting the figure
-plt.figure(figsize=(12,8))
-heatmap_fig = sns.heatmap(logged_data, cmap="coolwarm") # ,yticklabels=False)
-heatmap_fig.set_title("Normalised Gene Expression")
-heatmap_fig.set(xlabel="Participant",ylabel="Gene")
+for i, group in enumerate(groups):
+    temp = GE_matrix2.loc[:,group]
+    logged_data = np.log(temp)
+    logged_data = logged_data.loc[hundred_list]
+    logged_data.index = logged_data.index.map(mapping_genes)
 
-# Save the figure
-heatmap_fig.figure.savefig("heatmap.png", format="png")
+    plt.figure(figsize=(12, 8))
+    if i == 2:
+        heatmap_fig = sns.heatmap(logged_data, cmap="coolwarm",ax = axes[i],vmin=global_min, vmax=global_max,yticklabels=False)  # ,yticklabels=False)
+        heatmap_fig.set_ylabel("")
+    if i == 0:
+        heatmap_fig = sns.heatmap(logged_data, cmap="coolwarm",ax = axes[i],vmin=global_min, vmax=global_max,cbar=False,yticklabels=True)  # ,yticklabels=False)
+        heatmap_fig.set_yticklabels(heatmap_fig.get_yticklabels(), fontsize=5.5)
+    if i == 1:
+        heatmap_fig = sns.heatmap(logged_data, cmap="coolwarm",ax = axes[i],vmin=global_min, vmax=global_max,cbar=False,yticklabels=False)  # ,yticklabels=False)
+        heatmap_fig.set_ylabel("")
 
-# plt.figure(figsize=(12,8))
-# cluster_fig = sns.clustermap(logged_data, cmap="coolwarm",yticklabels=False,row_cluster=True,col_cluster=True,row_linkage=None)
-# cluster_fig.figure.savefig("clustermap.png", format="png")
+    heatmap_fig.set_title(f"{files[i]} heatmap")
+
+
+plt.tight_layout()
+
+heatmap_fig.figure.savefig(f"heatmaps.png", format="png")
+
+print(pltform.columns)
+
+print(pltform["Gene Ontology Biological Process"].isna().sum())
+print(pltform["Gene Ontology Cellular Component"].isna().sum())
+print(pltform["Gene Ontology Molecular Function"].isna().sum())
