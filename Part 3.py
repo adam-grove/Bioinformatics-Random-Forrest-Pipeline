@@ -14,7 +14,7 @@ import seaborn as sns
 import time
 
 # Setting up the data frame
-GE_matrix2 = pd.read_csv("GSE34205_series_matrix_clean.txt", sep = "\t", index_col=0,nrows=1000) # Needs the gene ID labels
+# GE_matrix2 = pd.read_csv("GSE34205_series_matrix_clean.txt", sep = "\t", index_col=0) # Needs the gene ID labels
 meta_data = pd.read_csv("meta_data.csv")
 
 # Gene mapping
@@ -27,9 +27,14 @@ for key,value in mapping_genes.items():
         mapping_genes[key] = key
 
 # Put a check to see
+features = pd.read_csv("features.csv",index_col=0)
+features = features.iloc[:,:101]
+
+print(features)
 
 
-all_transposed = GE_matrix2.T
+
+all_transposed = features.T
 all_transposed.index = all_transposed.index.rename("Sample_geo_accession")
 
 # Only getting the columns needed for the merge
@@ -205,7 +210,7 @@ files = ["influenza","rsv","control"]
 
 hundred_list = (hundred_features.index.to_list())
 
-logged_data = np.log(GE_matrix2)
+logged_data = np.log(features)
 global_min = logged_data.min().min()
 global_max = logged_data.max().max()
 
@@ -214,7 +219,7 @@ fig, axes = plt.subplots(ncols=3, figsize=(12, 8))
 
 
 for i, group in enumerate(groups):
-    temp = GE_matrix2.loc[:,group]
+    temp = features.loc[:,group]
     logged_data = np.log(temp)
     logged_data = logged_data.loc[hundred_list]
     logged_data.index = logged_data.index.map(mapping_genes)
