@@ -12,29 +12,28 @@ import re
 from sklearn.metrics import f1_score
 import seaborn as sns
 import time
+import statistics
+
 
 # Setting up the data frame
 # GE_matrix2 = pd.read_csv("GSE34205_series_matrix_clean.txt", sep = "\t", index_col=0) # Needs the gene ID labels
 meta_data = pd.read_csv("meta_data.csv")
 
 # Gene mapping
-pltform = pd.read_table("GPL570-55999.txt", comment="#", delimiter='\t')
+pltform = pd.read_table("GPL570-55999.txt", comment="#", delimiter='\t') # Reading in the platform file
 mapping_genes = dict(zip(pltform["ID"], pltform["Gene Symbol"])) # Creates a dictionary from the Gene ID and Gene symbols
 
 # Filling empty values
 for key,value in mapping_genes.items():
     if value is None or value != value:
-        mapping_genes[key] = key
+        mapping_genes[key] = key # If the value is missing keep original values
 
 # Put a check to see
 features = pd.read_csv("features.csv",index_col=0)
 features = features.iloc[:,:101]
+# print(features)
 
-print(features)
-
-
-
-all_transposed = features.T
+all_transposed = features.T # Transposing the dataframe
 all_transposed.index = all_transposed.index.rename("Sample_geo_accession")
 
 # Only getting the columns needed for the merge
@@ -47,10 +46,10 @@ final_classifier_df.to_csv("Classifier_dataset.csv")
 print(final_classifier_df.head())
 
 # Generating the training and testing data
-x = final_classifier_df.iloc[1:,1:-1] # Misses the first row (all the features) # Missies the infection status too
+x = final_classifier_df.iloc[1:,1:-1] # Misses the first row (all the features) # Misses the infection status too
 y = final_classifier_df["infection_status"].iloc[1:]
 
-x_train, x_test , y_train, y_test = train_test_split(x,y,test_size = 0.3)
+x_train, x_test , y_train, y_test = train_test_split(x,y,test_size = 0.3) #test data
 
 # Creating the classifier
 classifer = RandomForestClassifier(n_estimators=100)
@@ -87,10 +86,10 @@ while counter < runs: # Runs 10 times
 
     end = time.time()
     run_time = end - start
-    print(f"Random Forrest Run: {counter + 1} Time taken: {run_time:.2f}seconds")
-
-# Output files
+    print(f"Random Forrest Run: {counter + 1} Time taken: {run_time:.2f}seconds") # Just for show really
     counter += 1
+# Output files
+
 with open("Confusion_matrix.csv","w") as csv:
     for i in range(runs): # For each summary statistics
         # Saving the confusion matrix to a csv file
@@ -154,7 +153,7 @@ with open("Summary_report_file.txt","w") as file:
     row_average = all_feature_imp_df.mean(axis=1)
     all_feature_imp_df["Average_score"] = row_average
     best_feature_imp_df = pd.DataFrame(row_average, columns=["Average_score"])
-    best_feature_imp_df = best_feature_imp_df.sort_values(by="Average_score",ascending=False)
+    best_feature_imp_df = best_feature_imp_df.sort_values(by="Average_score",ascending=False) # Sorts from most important downwards
     # Mapping gene names
     hundred_features = best_feature_imp_df.iloc[:100,:]
 
@@ -173,7 +172,7 @@ with open("Summary_report_file.txt","w") as file:
 num_rows, num_cols = 10, 10
 fig, axes = plt.subplots(nrows=num_rows, ncols=num_cols, figsize=(20, 20))
 num_rows, num_cols = 10, 10
-axes = axes.flatten()
+axes = axes.flatten() # So that I can plot the boxplots in an array
 
 
 # For each index in the hundred features
@@ -188,6 +187,36 @@ for i, gene_ID in enumerate(hundred_features.index) :
     axes[i].boxplot(data, labels=["influenza", "rsv", "control"])
     axes[i].set(title=mapping_genes[gene_ID])
 
+# Counters (for report)
+flu_high = 0
+flu_low = 0
+rsv_high = 0
+rsv_low = 0
+
+
+for i, gene_ID in enumerate(hundred_features.index) :
+    gene_data = final_classifier_df[gene_ID]
+    infection_status = final_classifier_df["infection_status"] # Status
+    infection_groups = gene_data.groupby(infection_status)
+
+    # Median expression of each feature in each infection group
+    flu_med = statistics.median( infection_groups.get_group("influenza"))
+    rsv_med = statistics.median( infection_groups.get_group("rsv"))
+    control_med = statistics.median(infection_groups.get_group("none"))
+
+    # Assessing proportions (for report)
+    if flu_med > control_med:
+        flu_high +=1
+    if flu_med < control_med:
+        flu_low +=1
+    if rsv_med > control_med:
+        rsv_high += 1
+    if rsv_med < control_med:
+        rsv_low += 1
+
+# For report
+print(f"Influenza {flu_high} higher, {flu_low} lower")
+print(f"Rsv {rsv_high} higher, {rsv_low} lower")
 
 plt.tight_layout()
 
@@ -207,24 +236,29 @@ control_gene_probes = control_meta["Sample_geo_accession"].tolist()
 groups = [influenza_gene_probes,rsv_gene_probes,control_gene_probes]
 files = ["influenza","rsv","control"]
 
-
+# List of the 100 most important features
 hundred_list = (hundred_features.index.to_list())
 
+# Log transforming the data
 logged_data = np.log(features)
-global_min = logged_data.min().min()
-global_max = logged_data.max().max()
 
+# To keep the scales consistent
+global_min = logged_data.min().min() # The lowest value
+global_max = logged_data.max().max() # The higest value
 
+# 3 Heatmaps sideby side
 fig, axes = plt.subplots(ncols=3, figsize=(12, 8))
 
-
+# Creating the heatmap
 for i, group in enumerate(groups):
     temp = features.loc[:,group]
-    logged_data = np.log(temp)
-    logged_data = logged_data.loc[hundred_list]
-    logged_data.index = logged_data.index.map(mapping_genes)
+    logged_data = np.log(temp)  # Log transform
+    logged_data = logged_data.loc[hundred_list] # Only gets the hundred most important features
+    logged_data.index = logged_data.index.map(mapping_genes) # Y labels
 
     plt.figure(figsize=(12, 8))
+
+    # Conditional formatting to make sure that the heatmaps have the right combination of scale bars and y tick labels
     if i == 2:
         heatmap_fig = sns.heatmap(logged_data, cmap="coolwarm",ax = axes[i],vmin=global_min, vmax=global_max,yticklabels=False)  # ,yticklabels=False)
         heatmap_fig.set_ylabel("")
@@ -242,8 +276,4 @@ plt.tight_layout()
 
 heatmap_fig.figure.savefig(f"heatmaps.png", format="png")
 
-print(pltform.columns)
-
-print(pltform["Gene Ontology Biological Process"].isna().sum())
-print(pltform["Gene Ontology Cellular Component"].isna().sum())
-print(pltform["Gene Ontology Molecular Function"].isna().sum())
+# Part 3 complete

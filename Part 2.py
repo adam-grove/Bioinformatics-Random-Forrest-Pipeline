@@ -16,6 +16,7 @@ import seaborn as sns
 # Reading in meta data
 meta_data = pd.read_csv("meta_data.csv")
 
+# Separating the data by infection status
 influenza_meta = meta_data[meta_data["infection_status"] == "influenza"]
 rsv_meta = meta_data[meta_data["infection_status"] == "rsv"]
 control_meta = meta_data[meta_data["infection_status"] == "none"]
@@ -25,14 +26,12 @@ influenza_gene_probes =influenza_meta["Sample_geo_accession"].tolist()
 rsv_gene_probes = rsv_meta["Sample_geo_accession"].tolist()
 control_gene_probes = control_meta["Sample_geo_accession"].tolist()
 
-
 # Read in the features file
 features = pd.read_csv("features.csv",header=None)
 # Check that it has been read in correctly
 
-
 # Transpose the dataframe
-features_transposed = features.iloc[:,0:101].T # Tranposes# the df
+features_transposed = features.iloc[:,0:101].T # Tranposes the df
 
 # Setting the index
 features_transposed.set_index(features_transposed[0], inplace = True) # Sets the gene names as the index
@@ -47,12 +46,9 @@ features_transposed.index = features_transposed.index.rename("Sample_geo_accessi
 features_transposed.rename(columns = {0:"Sample_geo_accession"}, inplace=True) # Renaming the gene ID table
 features_transposed.to_csv("Test.csv") # For testing purposes
 print(features_transposed.columns)
-#
-#
-#
-# # Scaling the variables
-#
-#
+
+#  Scaling the variables
+
 x = features_transposed
 x = StandardScaler().fit_transform(x)
 plt.style.use("seaborn-v0_8-darkgrid")
@@ -140,3 +136,7 @@ ax.legend(age_labels)
 fig.savefig("Age_PCA.png", format="png")
 
 # Part 2 Complete
+
+# Lengths for report
+print(f"Young: {len(younger_gene_probes)}, Old: {len(older_gene_probes)}") # Young and "Old" (haha)
+print(f"Male: {len(female_gene_probes)} Male: {len(male_gene_probes)}") # M vs F
